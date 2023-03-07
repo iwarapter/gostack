@@ -1,0 +1,34 @@
+openapi: 3.0.0
+info:
+  description: Simple Example
+  title: Simple Example
+  version: "1.0.0"
+paths:
+  '/simple':
+    get:
+      summary: Example
+      operationId: getExample
+      responses:
+        '200':
+          $ref: '#/components/responses/Example'
+      x-amazon-apigateway-integration:
+        uri: "arn:aws:lambda:us-east-1:123456789012:function:simple"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        timeoutInMillis: 5000
+        type: "aws_proxy"
+components:
+  responses:
+    Example:
+      description: Example
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Example'
+  schemas:
+    Example:
+      type: object
+      properties:
+        Example:
+          type: string
+          description: example

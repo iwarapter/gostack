@@ -1,0 +1,4 @@
+*.zip
+*.json
+dist
+lambstack/examples/simple/simple

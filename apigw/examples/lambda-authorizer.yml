@@ -1,0 +1,47 @@
+openapi: 3.0.0
+info:
+  description: Lambda Authorizer
+  title: Lambda Authorizer
+  version: "1.0.0"
+paths:
+  '/simple':
+    get:
+      summary: Example
+      operationId: getExample
+      responses:
+        '200':
+          $ref: '#/components/responses/Example'
+      security:
+        - authorizer: []
+      x-amazon-apigateway-integration:
+        uri: "arn:aws:lambda:us-east-1:123456789012:function:simple"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        timeoutInMillis: 5000
+        type: "aws_proxy"
+components:
+  securitySchemes:
+    authorizer:
+      type: "apiKey"
+      name: "Authorization"
+      in: "header"
+      x-amazon-apigateway-authtype: "custom"
+      x-amazon-apigateway-authorizer:
+        authorizerUri: "arn:aws:lambda:us-east-1:123456789012:function:request-auth"
+        authorizerResultTtlInSeconds: 300
+        type: "request"
+        identitySource : "method.request.header.Authorization"
+  responses:
+    Example:
+      description: Example
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Example'
+  schemas:
+    Example:
+      type: object
+      properties:
+        Example:
+          type: string
+          description: example
