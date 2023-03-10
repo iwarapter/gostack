@@ -128,7 +128,7 @@ func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory) (http.Handl
 		}
 	}
 
-	lb := alb.New(router, lambs)
+	lb := alb.New(router, lambs, stack.MockData)
 	for _, a := range stack.ALBs {
 		for _, rule := range a.Rules {
 			err := lb.AddRule(rule)

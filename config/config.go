@@ -1,9 +1,15 @@
 package config
 
 type GoStack struct {
-	APIs    []APIGW  `yaml:"apigateways"`
-	ALBs    []ALB    `yaml:"albs"`
-	Lambdas []Lambda `yaml:"lambdas"`
+	APIs     []APIGW             `yaml:"apigateways"`
+	ALBs     []ALB               `yaml:"albs"`
+	Lambdas  []Lambda            `yaml:"lambdas"`
+	MockData map[string]MockData `yaml:"mock-data"`
+}
+
+type MockData struct {
+	Introspection map[string]any `yaml:"introspection"`
+	Userinfo      map[string]any `yaml:"userinfo"`
 }
 
 type APIGW struct {

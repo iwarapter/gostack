@@ -6,13 +6,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	mrand "math/rand"
 	"net/http"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
 
+	cache "github.com/Code-Hex/go-generics-cache"
+
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -57,10 +60,10 @@ func (alb *ALB) OidcHandler(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		data := alb.mockData[sess.Values["sub"].(string)]
-		log.Info().Interface("mock_data", data).Msg("oidc handler")
+		token := sess.Values["token"].(string)
+		data := alb.mockData[token]
 
-		r.Header.Set("x-amzn-oidc-accesstoken", data.Token)
+		r.Header.Set("x-amzn-oidc-accesstoken", token)
 		r.Header.Set("x-amzn-oidc-data", data.OidcData)
 		next.ServeHTTP(w, r)
 	}
@@ -101,6 +104,16 @@ func (alb *ALB) signJwt(header, claims map[string]any) (string, error) {
 	return strings.Join([]string{hdr, clm, base64.URLEncoding.EncodeToString(out)}, "."), nil
 }
 
+const alphaNumeric = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func createToken(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = alphaNumeric[mrand.Intn(len(alphaNumeric))] //#nosec
+	}
+	return string(b)
+}
+
 func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
@@ -113,6 +126,10 @@ func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 		}
 		sub := r.Form.Get("sub")
 
+		code := createToken(32)
+		token := createToken(32)
+		alb.codeExchange.Set(code, token, cache.WithExpiration(1*time.Minute))
+
 		intro := make(map[string]any)
 		_ = json.Unmarshal([]byte(r.Form.Get("introspection")), &intro)
 		intro["sub"] = sub
@@ -122,14 +139,14 @@ func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 		_ = json.Unmarshal([]byte(r.Form.Get("userinfo")), &claims)
 		claims["sub"] = sub
 		oidcData, _ := alb.signJwt(oidcHeader(), claims)
-		alb.mockData[sub] = mockdata{
-			Token:         "fake",
+		alb.mockData[token] = mockdata{
+			Sub:           sub,
 			Userinfo:      r.Form.Get("userinfo"),
 			Introspection: string(introResp),
 			OidcData:      oidcData,
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:8080/oauth2/idpresponse?code=%s", base64.StdEncoding.EncodeToString([]byte(sub))), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:8080/oauth2/idpresponse?code=%s", code), http.StatusFound)
 	}
 }
 
@@ -147,14 +164,20 @@ func oidcHeader() map[string]any {
 
 func (alb *ALB) idpResponse() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		b, _ := base64.StdEncoding.DecodeString(r.URL.Query().Get("code"))
-		sub := string(b)
+		code := r.URL.Query().Get("code")
+		token, ok := alb.codeExchange.Get(code)
+		if !ok {
+			log.Error().Msg("unable to find code to exchange, redirecting to login")
+			http.Redirect(w, r, "http://auth.127.0.0.1.nip.io:8080/login", http.StatusFound)
+			return
+		}
 		sess, _ := store.Get(r, "gostack")
 		sess.Values["authenticated"] = true
-		sess.Values["sub"] = sub
+		sess.Values["sub"] = alb.mockData[token].Sub
+		sess.Values["token"] = token
 
 		if err := sess.Save(r, w); err != nil {
-			zerolog.Ctx(r.Context()).Error().Err(err).Msg("unable to save session for idp response")
+			log.Error().Err(err).Msg("unable to save session for idp response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -172,7 +195,7 @@ func (alb *ALB) endSession() http.HandlerFunc {
 			http.Redirect(w, r, postLogoutRedirectURI, http.StatusFound)
 			return
 		} else {
-			zerolog.Ctx(r.Context()).Error().Msg("no 'post_logout_redirect_uri' query param provided for the end session endpoint")
+			log.Error().Msg("no 'post_logout_redirect_uri' query param provided for the end session endpoint")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -181,18 +204,53 @@ func (alb *ALB) endSession() http.HandlerFunc {
 
 func (alb *ALB) userinfo() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		for sub := range alb.mockData {
-			_, _ = w.Write([]byte(alb.mockData[sub].Userinfo))
-			return
+		if token, err := getTokenFromHeader(r.Header); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+		} else {
+			if data, ok := alb.mockData[token]; ok {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(data.Userinfo))
+			} else {
+				log.Error().Str("token", token).Msg("the token is not in the mock data store")
+				w.WriteHeader(http.StatusBadRequest)
+			}
 		}
 	}
 }
 
+func getTokenFromHeader(headers map[string][]string) (string, error) {
+	auth := headers["Authorization"]
+	if len(auth) == 0 {
+		return "", fmt.Errorf("no authorization header provided")
+	}
+	if auth[0] == "" {
+		auth = headers["authorization"]
+	}
+	rx := regexp.MustCompile(`^[bB]earer (.*)$`)
+	token := rx.FindStringSubmatch(auth[0])
+	if len(token) != 2 {
+		return "", fmt.Errorf("unable to extract bearer token from header")
+	}
+	return token[1], nil
+}
+
 func (alb *ALB) introspection() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		for sub := range alb.mockData {
-			w.Header().Add("Content-Type", "application/json")
-			_, _ = w.Write([]byte(alb.mockData[sub].Introspection))
+		if err := r.ParseForm(); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// TODO it should be authenticated
+		if token := r.Form.Get("token"); token != "" {
+			if data, ok := alb.mockData[token]; ok {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(data.Introspection))
+			} else {
+				log.Error().Str("token", token).Msg("the token is not in the mock data store")
+				w.WriteHeader(http.StatusBadRequest)
+			}
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}

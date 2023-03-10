@@ -1,13 +1,17 @@
 package alb
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
+
+	cache "github.com/Code-Hex/go-generics-cache"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -18,22 +22,25 @@ import (
 )
 
 type ALB struct {
-	signer   *ecdsa.PrivateKey
-	lambs    lambstack.LambdaFactory
-	router   *mux.Router
-	mockData map[string]mockdata
+	signer       *ecdsa.PrivateKey
+	lambs        lambstack.LambdaFactory
+	router       *mux.Router
+	mockData     map[string]mockdata
+	codeExchange *cache.Cache[string, string]
 }
 
 type mockdata struct {
 	Userinfo      string
-	Token         string
+	Sub           string
 	Introspection string
 	OidcData      string
 }
 
 var store = sessions.NewCookieStore([]byte("top_secret"))
 
-func New(subrouter *mux.Router, lambs lambstack.LambdaFactory) *ALB {
+func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]config.MockData) *ALB {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		panic(err)
@@ -52,9 +59,6 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory) *ALB {
 		Path:     "/",
 		MaxAge:   300,
 		HttpOnly: true,
-		//SameSite: http.SameSiteNoneMode,
-		//Secure:   false,
-		//Domain: "alb.127.0.0.1.nip.io",
 	}
 	authRouter := subrouter.Host("auth.127.0.0.1.nip.io").Subrouter()
 	albRouter := subrouter.Host("alb.127.0.0.1.nip.io").Subrouter()
@@ -63,22 +67,28 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory) *ALB {
 		_, _ = fmt.Fprint(w, string(pub))
 	})
 
-	api := &ALB{
-		signer:   key,
-		router:   albRouter,
-		lambs:    lambs,
-		mockData: map[string]mockdata{},
+	lb := &ALB{
+		signer:       key,
+		router:       albRouter,
+		lambs:        lambs,
+		mockData:     map[string]mockdata{},
+		codeExchange: cache.NewContext[string, string](ctx),
+	}
+	for s, dat := range mdata {
+		intro, _ := json.Marshal(dat.Introspection)
+		uinfo, _ := json.Marshal(dat.Userinfo)
+		lb.mockData[s] = mockdata{Introspection: string(intro), Userinfo: string(uinfo)}
 	}
 
-	authRouter.Methods(http.MethodPost).Path("/submit").Handler(api.authSubmitHandler())
-	authRouter.Methods(http.MethodGet).Path("/login").Handler(api.authLoginHandler())
-	authRouter.Methods(http.MethodGet).Path("/end").Handler(api.endSession())
-	authRouter.Methods(http.MethodGet).Path("/userinfo").Handler(api.userinfo())
-	authRouter.Methods(http.MethodPost).Path("/introspection").Handler(api.introspection())
+	authRouter.Methods(http.MethodPost).Path("/submit").Handler(lb.authSubmitHandler())
+	authRouter.Methods(http.MethodGet).Path("/login").Handler(lb.authLoginHandler())
+	authRouter.Methods(http.MethodGet).Path("/end").Handler(lb.endSession())
+	authRouter.Methods(http.MethodGet).Path("/userinfo").Handler(lb.userinfo())
+	authRouter.Methods(http.MethodPost).Path("/introspection").Handler(lb.introspection())
 
-	albRouter.Methods(http.MethodGet).Path("/oauth2/idpresponse").Handler(api.idpResponse())
+	albRouter.Methods(http.MethodGet).Path("/oauth2/idpresponse").Handler(lb.idpResponse())
 
-	return api
+	return lb
 }
 
 func (alb *ALB) AddRule(rule config.ALBRule) error {
@@ -98,14 +108,12 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 	if !rule.OIDC && rule.FixedResponse != nil {
 		r.Handler(FixedResponseHandler(rule.FixedResponse.Body, rule.FixedResponse.ContentType))
 	}
-
 	if rule.OIDC && rule.Target != "" {
 		r.Handler(alb.OidcHandler(alb.LambdaProxy(rule.Target)))
 	}
 	if !rule.OIDC && rule.Target != "" {
 		r.Handler(alb.LambdaProxy(rule.Target))
 	}
-
 	if rule.OIDC && rule.Files != nil {
 		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index}
 		r.Handler(alb.OidcHandler(spa.ServeHTTP))

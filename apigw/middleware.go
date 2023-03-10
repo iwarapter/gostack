@@ -134,6 +134,13 @@ func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		w.WriteHeader(resp.StatusCode)
+		for s := range resp.Headers {
+			w.Header().Add(s, resp.Headers[s])
+		}
+		for s := range resp.MultiValueHeaders {
+			w.Header().Add(s, resp.MultiValueHeaders[s][0])
+		}
 		_, _ = w.Write([]byte(resp.Body))
 	}
 }

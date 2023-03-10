@@ -31,7 +31,8 @@ func Test_ImportSimpleGetAPI(t *testing.T) {
 		responses: map[string]func() ([]byte, error){
 			"arn:aws:lambda:us-east-1:123456789012:function:simple": func() ([]byte, error) {
 				resp := events.APIGatewayProxyResponse{
-					Body: "unit-test",
+					Body:       "unit-test",
+					StatusCode: http.StatusOK,
 				}
 
 				return json.Marshal(&resp)
@@ -75,7 +76,8 @@ func Test_ImportLambdaAuthorizerGetAPI(t *testing.T) {
 		responses: map[string]func() ([]byte, error){
 			"arn:aws:lambda:us-east-1:123456789012:function:simple": func() ([]byte, error) {
 				resp := events.APIGatewayProxyResponse{
-					Body: "unit-test",
+					Body:       "unit-test",
+					StatusCode: http.StatusOK,
 				}
 				calls++
 				return json.Marshal(&resp)
