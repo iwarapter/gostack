@@ -19,24 +19,68 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// straight from chatgpt
-var loginForm = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Login</title>
-  </head>
-  <body>
-    <form action="/submit" method="POST">
-      <label for="sub">SUB:</label>
-      <textarea id="sub" name="sub">user@test.io</textarea>
-	  <label for="introspection">INTROSPECTION:</label>
-      <textarea id="introspection" name="introspection">{"active": true,"scope": "openid"}</textarea>
-	  <label for="userinfo">USERINFO:</label>
-      <textarea id="userinfo" name="userinfo">{}</textarea>
+var loginForm = `
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+    }
+
+    button {
+      background-color: white;
+      color: black;
+      border: 2px solid #4CAF50;
+      border-radius: 5px;
+      min-width: 10rem;
+      padding: .3rem;
+    }
+
+    .submit {
+      text-align: end;
+    }
+
+    .form {
+      display: inline-grid;
+    }
+
+    label {
+      text-align: initial;
+    }
+
+    textarea {
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <form class="form" action="/submit" method="POST">
+    <label for="sub">SUB:</label>
+    <textarea id="sub" name="sub" rows="10" cols="50">user@test.io</textarea>
+    <br />
+
+    <label for="introspection">INTROSPECTION:</label>
+    <textarea id="introspection" rows="10" cols="50" name="introspection">{"active": true,"scope": "openid"}</textarea>
+    <br />
+
+    <label for="userinfo">USERINFO:</label>
+    <textarea id="userinfo" rows="10" cols="50" name="userinfo">{}</textarea>
+    <br />
+
+    <div class="submit">
       <button type="submit">Submit</button>
-    </form>
-  </body>
+    </div>
+  </form>
+</body>
+
 </html>
 `
 
