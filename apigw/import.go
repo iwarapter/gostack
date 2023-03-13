@@ -57,28 +57,30 @@ func (api *API) addOperationToAPI(spec *openapi3.T, op *openapi3.Operation, meth
 		} else {
 			if op.Security != nil && len(*op.Security) > 0 {
 				// we are going to assume one for now
-				var name string
+				auths := make([]string, 0)
 				for _, req := range *op.Security {
 					for k := range req {
-						name = k
+						auths = append(auths, k)
 					}
 				}
-				if sec, ok := spec.Components.SecuritySchemes[name]; ok {
-					if val, ok := sec.Value.Extensions["x-amazon-apigateway-authorizer"]; ok {
-						var auth XAmazonAPIGatewayAuthorizer
-						if err := mapstructure.Decode(val, &auth); err != nil {
-							return fmt.Errorf("unable to parse x-amazon-apigateway-authorizer extension for %s error: %w", name, err)
+				for _, name := range auths {
+					if sec, ok := spec.Components.SecuritySchemes[name]; ok {
+						if val, ok := sec.Value.Extensions["x-amazon-apigateway-authorizer"]; ok {
+							var auth XAmazonAPIGatewayAuthorizer
+							if err := mapstructure.Decode(val, &auth); err != nil {
+								return fmt.Errorf("unable to parse x-amazon-apigateway-authorizer extension for %s error: %w", name, err)
+							}
+							handler := Logger(api.Authorizer(auth.AuthorizerURI, auth.Type, api.LambdaProxy(data.URI, path, method)), op.OperationID)
+							api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
+						} else {
+							// if _, ok := sec.Value.Extensions["sigv4"]; ok {
+							// TODO something sig4
+							handler := Logger(api.LambdaProxy(data.URI, path, method), op.OperationID)
+							api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
 						}
-						handler := Logger(api.Authorizer(auth.AuthorizerURI, auth.Type, api.LambdaProxy(data.URI, path, method)), op.OperationID)
-						api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
 					} else {
-						// if _, ok := sec.Value.Extensions["sigv4"]; ok {
-						// TODO something sig4
-						handler := Logger(api.LambdaProxy(data.URI, path, method), op.OperationID)
-						api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
+						return fmt.Errorf("something didnt work 2")
 					}
-				} else {
-					return fmt.Errorf("something didnt work 2")
 				}
 			} else {
 				handler := Logger(api.LambdaProxy(data.URI, path, method), op.OperationID)
