@@ -46,8 +46,13 @@ func (alb *ALB) LambdaProxy(arn string) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		for hdr, vals := range resp.MultiValueHeaders {
+			for _, val := range vals {
+				w.Header().Add(hdr, val)
+			}
+		}
 		for k, v := range resp.Headers {
-			w.Header().Set(k, v)
+			w.Header().Add(k, v)
 		}
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write([]byte(resp.Body))
