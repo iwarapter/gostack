@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda/messages"
@@ -31,6 +32,7 @@ type lambstack struct {
 	path        string
 	environment map[string]*string
 	cmd         *exec.Cmd
+	mu          sync.Mutex
 }
 
 func (l *lambstack) Start() error {
@@ -52,7 +54,8 @@ func (l *lambstack) Stop() error {
 
 func (l *lambstack) Invoke(payload any) ([]byte, error) {
 	t := time.Now().Add(time.Second * time.Duration(l.timeout))
-	return Run(Input{
+	l.mu.Lock()
+	b, err := Run(Input{
 		Deadline: &messages.InvokeRequest_Timestamp{
 			Seconds: t.Unix(),
 			Nanos:   int64(t.Nanosecond()),
@@ -60,6 +63,8 @@ func (l *lambstack) Invoke(payload any) ([]byte, error) {
 		Port:    l.port,
 		Payload: payload,
 	})
+	l.mu.Unlock()
+	return b, err
 }
 
 type Factory struct {

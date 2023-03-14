@@ -85,7 +85,7 @@ func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory) (http.Handl
 	apiRouter := router.Host("api.127.0.0.1.nip.io").Subrouter()
 	apiRouter = apiRouter.PathPrefix("/restapis").Subrouter()
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
-	originsOk := handlers.AllowedOrigins([]string{"https://alb.127.0.0.1.nip.io:8080"})
+	originsOk := handlers.AllowedOrigins([]string{"http://alb.127.0.0.1.nip.io:8080"})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
 	apiRouter.Use(handlers.CORS(originsOk, headersOk, methodsOk, handlers.AllowCredentials()))
 

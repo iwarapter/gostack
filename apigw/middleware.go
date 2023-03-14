@@ -126,11 +126,13 @@ func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
 		}
 		b, err := api.lambs.Invoke(arn, payload)
 		if err != nil {
+			log.Error().Err(err).Str("arn", arn).Msg("unable to invoke lambda")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		var resp events.APIGatewayProxyResponse
 		if err = json.Unmarshal(b, &resp); err != nil {
+			log.Error().Err(err).Str("arn", arn).Msg("unable to unmarshal lambda response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
