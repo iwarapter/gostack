@@ -22,12 +22,13 @@ type ALB struct {
 }
 
 type ALBRule struct {
-	Path          string         `yaml:"path"`
-	Methods       []string       `yaml:"methods"`
-	FixedResponse *FixedResponse `yaml:"fixed-response,omitempty"`
-	Target        string         `yaml:"target"`
-	OIDC          bool           `yaml:"oidc"`
-	Files         *FileServer    `yaml:"files"`
+	Path          string            `yaml:"path"`
+	Methods       []string          `yaml:"methods"`
+	Headers       map[string]string `yaml:"headers"`
+	FixedResponse *FixedResponse    `yaml:"fixed-response,omitempty"`
+	Target        string            `yaml:"target"`
+	OIDC          bool              `yaml:"oidc"`
+	Files         *FileServer       `yaml:"files"`
 }
 
 type FileServer struct {

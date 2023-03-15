@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -110,6 +111,13 @@ func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
 		for k, v := range r.URL.Query() {
 			qParams[k] = strings.Join(v, " ")
 		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Error().Err(err).Str("arn", arn).Msg("unable to read body")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
 		payload := events.APIGatewayProxyRequest{
 			Resource:              "/{proxy+}",
 			Path:                  strings.TrimPrefix(r.URL.Path, fmt.Sprintf("/restapis/%s", api.ID)),
@@ -117,6 +125,7 @@ func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
 			QueryStringParameters: qParams,
 			Headers:               headers,
 			PathParameters:        params,
+			Body:                  string(body),
 		}
 
 		if auth := r.Context().Value(AuthorizerContext); auth != nil {

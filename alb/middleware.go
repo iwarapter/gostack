@@ -2,6 +2,7 @@ package alb
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -28,11 +29,19 @@ func (alb *ALB) LambdaProxy(arn string) http.HandlerFunc {
 		for k, v := range r.URL.Query() {
 			qParams[k] = strings.Join(v, " ")
 		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Error().Err(err).Str("arn", arn).Msg("unable to read body")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
 		payload := events.ALBTargetGroupRequest{
 			HTTPMethod:            r.Method,
 			Path:                  r.URL.Path,
 			Headers:               headers,
 			QueryStringParameters: qParams,
+			Body:                  string(body),
 		}
 		b, err := alb.lambs.Invoke(arn, payload)
 		if err != nil {

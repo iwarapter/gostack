@@ -99,6 +99,9 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 	} else {
 		r = alb.router.Path(rule.Path)
 	}
+	for key, value := range rule.Headers {
+		r.Headers(key, value)
+	}
 	if len(rule.Methods) > 0 {
 		r.Methods(rule.Methods...)
 	}
