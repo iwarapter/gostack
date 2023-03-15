@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -22,18 +23,18 @@ func echo() http.HandlerFunc {
 func TestAPI_Authorizer(t *testing.T) {
 	var requestAuthAllowCalls, requestAuthDenyCalls, tokenAuthAllowCalls int
 	f := &mockFactory{
-		responses: map[string]func() ([]byte, error){
-			"arn:aws:lambda:us-east-1:123456789012:function:request-auth-allow": func() ([]byte, error) {
+		responses: map[string]func(payload any) ([]byte, error){
+			"arn:aws:lambda:us-east-1:123456789012:function:request-auth-allow": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayCustomAuthorizerResponse{PolicyDocument: events.APIGatewayCustomAuthorizerPolicy{Statement: []events.IAMPolicyStatement{{Action: []string{"*"}, Effect: "Allow", Resource: []string{"my-resource"}}}}, Context: map[string]interface{}{}}
 				requestAuthAllowCalls++
 				return json.Marshal(&resp)
 			},
-			"arn:aws:lambda:us-east-1:123456789012:function:token-auth-allow": func() ([]byte, error) {
+			"arn:aws:lambda:us-east-1:123456789012:function:token-auth-allow": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayCustomAuthorizerResponse{PolicyDocument: events.APIGatewayCustomAuthorizerPolicy{Statement: []events.IAMPolicyStatement{{Action: []string{"*"}, Effect: "Allow", Resource: []string{"my-resource"}}}}, Context: map[string]interface{}{}}
 				tokenAuthAllowCalls++
 				return json.Marshal(&resp)
 			},
-			"arn:aws:lambda:us-east-1:123456789012:function:request-auth-deny": func() ([]byte, error) {
+			"arn:aws:lambda:us-east-1:123456789012:function:request-auth-deny": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayCustomAuthorizerResponse{PolicyDocument: events.APIGatewayCustomAuthorizerPolicy{Statement: []events.IAMPolicyStatement{{Action: []string{"*"}, Effect: "Deny", Resource: []string{"my-resource"}}}}, Context: map[string]interface{}{}}
 				requestAuthDenyCalls++
 				return json.Marshal(&resp)
@@ -116,6 +117,51 @@ func TestAPI_Authorizer(t *testing.T) {
 			tt.validate(t, rec)
 		})
 	}
+}
+
+func TestAPI_LambdaProxy(t *testing.T) {
+	var requestedCalls = 0
+	f := &mockFactory{
+		responses: map[string]func(payload any) ([]byte, error){
+			"arn:aws:lambda:us-east-1:123456789012:function:echo": func(payload any) ([]byte, error) {
+				event, ok := payload.(events.APIGatewayProxyRequest)
+				require.Truef(t, ok, "event must be events.APIGatewayProxyRequest")
+				requestedCalls++
+				return json.Marshal(events.APIGatewayProxyResponse{Body: event.Body, StatusCode: http.StatusOK})
+			},
+		},
+	}
+	r := mux.NewRouter()
+	api := New(r, f, "unit-test")
+
+	tests := []struct {
+		name, arn string
+		req       *http.Request
+		validate  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "authenticated requests are allowed",
+			arn:  "arn:aws:lambda:us-east-1:123456789012:function:echo",
+			req:  simplePost(t),
+			validate: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, rec.Code)
+				assert.Equal(t, `hello-world`, rec.Body.String())
+				assert.Equal(t, 1, requestedCalls)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			api.LambdaProxy(tt.arn).ServeHTTP(rec, tt.req)
+			tt.validate(t, rec)
+		})
+	}
+}
+func simplePost(t *testing.T) *http.Request {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader("hello-world"))
+	require.NoError(t, err)
+	return req
 }
 
 func unauthenticatedGET(t *testing.T) *http.Request {

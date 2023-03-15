@@ -99,7 +99,7 @@ func isAuthResponseDeny(auth events.APIGatewayCustomAuthorizerResponse) bool {
 	return false
 }
 
-func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
+func (api *API) LambdaProxy(arn string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := mux.Vars(r)
 
@@ -121,7 +121,7 @@ func (api *API) LambdaProxy(arn, path, method string) http.HandlerFunc {
 		payload := events.APIGatewayProxyRequest{
 			Resource:              "/{proxy+}",
 			Path:                  strings.TrimPrefix(r.URL.Path, fmt.Sprintf("/restapis/%s", api.ID)),
-			HTTPMethod:            method,
+			HTTPMethod:            r.Method,
 			QueryStringParameters: qParams,
 			Headers:               headers,
 			PathParameters:        params,

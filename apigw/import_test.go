@@ -19,17 +19,17 @@ import (
 
 type mockFactory struct {
 	lambstack.LambdaFactory
-	responses map[string]func() ([]byte, error)
+	responses map[string]func(payload any) ([]byte, error)
 }
 
 func (m mockFactory) Invoke(arn string, payload any) ([]byte, error) {
-	return m.responses[arn]()
+	return m.responses[arn](payload)
 }
 
 func Test_ImportSimpleGetAPI(t *testing.T) {
 	f := &mockFactory{
-		responses: map[string]func() ([]byte, error){
-			"arn:aws:lambda:us-east-1:123456789012:function:simple": func() ([]byte, error) {
+		responses: map[string]func(payload any) ([]byte, error){
+			"arn:aws:lambda:us-east-1:123456789012:function:simple": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayProxyResponse{
 					Body:       "unit-test",
 					StatusCode: http.StatusOK,
@@ -73,8 +73,8 @@ func Test_ImportSimpleGetAPI(t *testing.T) {
 func Test_ImportLambdaAuthorizerGetAPI(t *testing.T) {
 	calls := 0
 	f := &mockFactory{
-		responses: map[string]func() ([]byte, error){
-			"arn:aws:lambda:us-east-1:123456789012:function:simple": func() ([]byte, error) {
+		responses: map[string]func(payload any) ([]byte, error){
+			"arn:aws:lambda:us-east-1:123456789012:function:simple": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayProxyResponse{
 					Body:       "unit-test",
 					StatusCode: http.StatusOK,
@@ -82,7 +82,7 @@ func Test_ImportLambdaAuthorizerGetAPI(t *testing.T) {
 				calls++
 				return json.Marshal(&resp)
 			},
-			"arn:aws:lambda:us-east-1:123456789012:function:request-auth": func() ([]byte, error) {
+			"arn:aws:lambda:us-east-1:123456789012:function:request-auth": func(_ any) ([]byte, error) {
 				resp := events.APIGatewayCustomAuthorizerResponse{
 					PolicyDocument: events.APIGatewayCustomAuthorizerPolicy{
 						Statement: []events.IAMPolicyStatement{

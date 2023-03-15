@@ -70,12 +70,12 @@ func (api *API) addOperationToAPI(spec *openapi3.T, op *openapi3.Operation, meth
 							if err := mapstructure.Decode(val, &auth); err != nil {
 								return fmt.Errorf("unable to parse x-amazon-apigateway-authorizer extension for %s error: %w", name, err)
 							}
-							handler := Logger(api.Authorizer(auth.AuthorizerURI, auth.Type, api.LambdaProxy(data.URI, path, method)), op.OperationID)
+							handler := Logger(api.Authorizer(auth.AuthorizerURI, auth.Type, api.LambdaProxy(data.URI)), op.OperationID)
 							api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
 						} else {
 							// if _, ok := sec.Value.Extensions["sigv4"]; ok {
 							// TODO something sig4
-							handler := Logger(api.LambdaProxy(data.URI, path, method), op.OperationID)
+							handler := Logger(api.LambdaProxy(data.URI), op.OperationID)
 							api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
 						}
 					} else {
@@ -83,7 +83,7 @@ func (api *API) addOperationToAPI(spec *openapi3.T, op *openapi3.Operation, meth
 					}
 				}
 			} else {
-				handler := Logger(api.LambdaProxy(data.URI, path, method), op.OperationID)
+				handler := Logger(api.LambdaProxy(data.URI), op.OperationID)
 				api.router.Methods(method).Path(path).Name(op.OperationID).Handler(handler)
 			}
 		}
