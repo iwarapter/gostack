@@ -289,13 +289,14 @@ func (alb *ALB) introspection() http.HandlerFunc {
 			if data, ok := alb.mockData[token]; ok {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(data.Introspection))
+				return
 			} else {
 				log.Error().Str("token", token).Msg("the token is not in the mock data store")
-				w.WriteHeader(http.StatusBadRequest)
 			}
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			return
+			log.Error().Msg("token must be in the form body for introspection requests")
 		}
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		_, _ = w.Write([]byte(`{"active":false}`))
 	}
 }
