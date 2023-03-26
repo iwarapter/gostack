@@ -9,6 +9,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -58,13 +59,18 @@ var loginForm = `
     textarea {
       border-radius: 5px;
     }
+
+	input {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      border-radius: 5px;
+    }
   </style>
 </head>
 
 <body>
   <form class="form" action="/submit" method="POST">
     <label for="sub">SUB:</label>
-    <textarea id="sub" name="sub" rows="10" cols="50">user@test.io</textarea>
+    <input id="sub" name="sub" rows="1" cols="50" value="user@test.io">
     <br />
 
     <label for="introspection">INTROSPECTION:</label>
@@ -73,6 +79,10 @@ var loginForm = `
 
     <label for="userinfo">USERINFO:</label>
     <textarea id="userinfo" rows="10" cols="50" name="userinfo">{}</textarea>
+    <br />
+
+	<label for="cookie-max-age">Cookie Max-Age (Seconds):</label>
+    <input id="cookie-max-age" rows="1" cols="50" name="cookie-max-age" value="300">
     <br />
 
     <div class="submit">
@@ -100,7 +110,7 @@ func (alb *ALB) OidcHandler(next http.HandlerFunc) http.HandlerFunc {
 		// Check if user is authenticated
 		vals := sess.Values
 		if _, ok := vals["authenticated"].(bool); !ok {
-			http.Redirect(w, r, "http://auth.127.0.0.1.nip.io:8080/login", http.StatusFound)
+			http.Redirect(w, r, fmt.Sprintf("http://auth.127.0.0.1.nip.io:%d/login", alb.port), http.StatusFound)
 			return
 		}
 
@@ -183,14 +193,19 @@ func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 		_ = json.Unmarshal([]byte(r.Form.Get("userinfo")), &claims)
 		claims["sub"] = sub
 		oidcData, _ := alb.signJwt(oidcHeader(), claims)
+		maxAge, err := strconv.Atoi(r.Form.Get("cookie-max-age"))
+		if err != nil {
+			log.Error().Err(err).Msg("unable to parse cookie max age")
+			maxAge = 300
+		}
 		alb.mockData[token] = mockdata{
 			Sub:           sub,
 			Userinfo:      r.Form.Get("userinfo"),
 			Introspection: string(introResp),
 			OidcData:      oidcData,
+			CookieMaxAge:  &maxAge,
 		}
-
-		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:8080/oauth2/idpresponse?code=%s", code), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:%d/oauth2/idpresponse?code=%s", alb.port, code), http.StatusFound)
 	}
 }
 
@@ -212,20 +227,22 @@ func (alb *ALB) idpResponse() http.HandlerFunc {
 		token, ok := alb.codeExchange.Get(code)
 		if !ok {
 			log.Error().Msg("unable to find code to exchange, redirecting to login")
-			http.Redirect(w, r, "http://auth.127.0.0.1.nip.io:8080/login", http.StatusFound)
+			http.Redirect(w, r, fmt.Sprintf("http://auth.127.0.0.1.nip.io:%d/login", alb.port), http.StatusFound)
 			return
 		}
 		sess, _ := store.Get(r, "gostack")
 		sess.Values["authenticated"] = true
 		sess.Values["sub"] = alb.mockData[token].Sub
 		sess.Values["token"] = token
-
+		if alb.mockData[token].CookieMaxAge != nil {
+			sess.Options.MaxAge = *alb.mockData[token].CookieMaxAge
+		}
 		if err := sess.Save(r, w); err != nil {
 			log.Error().Err(err).Msg("unable to save session for idp response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, "http://alb.127.0.0.1.nip.io:8080/", http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:%d/", alb.port), http.StatusFound)
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Content-Type", "text/html")
 	}

@@ -3,7 +3,10 @@ package main
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"time"
+
+	"github.com/jessevdk/go-flags"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/lambda"
@@ -49,7 +52,21 @@ func Logger(next http.Handler) http.Handler {
 	})
 }
 
+type Opts struct {
+	Config string `short:"c" long:"config" description:"Path to the configuration file" default:"gostack.yml"`
+	Port   int    `short:"p" long:"port" description:"Listener port" default:"8080"`
+}
+
 func main() {
+	opts := Opts{}
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	b, err := os.ReadFile("gostack.yml")
@@ -57,14 +74,14 @@ func main() {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}
 	var stack config.GoStack
-	err = yaml.Unmarshal(b, &stack)
+	err = yaml.Unmarshal([]byte(os.ExpandEnv(string(b))), &stack)
 	if err != nil {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}
 
 	lambs := lambstack.New()
 	defer lambs.Close()
-	router, err := setupStack(stack, lambs)
+	router, err := setupStack(stack, lambs, opts.Port)
 	if err != nil {
 		log.Error().Err(err).Msg("unable to setup stack")
 		return
@@ -73,19 +90,19 @@ func main() {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		Handler:      router,
-		Addr:         ":8080",
+		Addr:         ":" + strconv.Itoa(opts.Port),
 	}
 	log.Error().Err(srv.ListenAndServe()).Send()
 }
 
-func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory) (http.Handler, error) {
+func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory, port int) (http.Handler, error) {
 	router := mux.NewRouter()
 	router.Use(Logger)
 
 	apiRouter := router.Host("api.127.0.0.1.nip.io").Subrouter()
 	apiRouter = apiRouter.PathPrefix("/restapis").Subrouter()
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type"})
-	originsOk := handlers.AllowedOrigins([]string{"http://alb.127.0.0.1.nip.io:8080"})
+	originsOk := handlers.AllowedOrigins([]string{"http://alb.127.0.0.1.nip.io:" + strconv.Itoa(port)})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
 	apiRouter.Use(handlers.CORS(originsOk, headersOk, methodsOk, handlers.AllowCredentials()))
 
@@ -128,7 +145,7 @@ func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory) (http.Handl
 		}
 	}
 
-	lb := alb.New(router, lambs, stack.MockData)
+	lb := alb.New(router, lambs, stack.MockData, port)
 	for _, a := range stack.ALBs {
 		for _, rule := range a.Rules {
 			err := lb.AddRule(rule)

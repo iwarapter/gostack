@@ -27,6 +27,7 @@ type ALB struct {
 	router       *mux.Router
 	mockData     map[string]mockdata
 	codeExchange *cache.Cache[string, string]
+	port         int
 }
 
 type mockdata struct {
@@ -34,11 +35,12 @@ type mockdata struct {
 	Sub           string
 	Introspection string
 	OidcData      string
+	CookieMaxAge  *int
 }
 
 var store = sessions.NewCookieStore([]byte("top_secret"))
 
-func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]config.MockData) *ALB {
+func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]config.MockData, port int) *ALB {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -73,6 +75,7 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]
 		lambs:        lambs,
 		mockData:     map[string]mockdata{},
 		codeExchange: cache.NewContext[string, string](ctx),
+		port:         port,
 	}
 	for s, dat := range mdata {
 		intro, _ := json.Marshal(dat.Introspection)

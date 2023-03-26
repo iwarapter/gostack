@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/rs/zerolog/log"
@@ -66,32 +65,4 @@ func (alb *ALB) LambdaProxy(arn string) http.HandlerFunc {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write([]byte(resp.Body))
 	}
-}
-
-type detailedResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (dw *detailedResponseWriter) WriteHeader(code int) {
-	dw.statusCode = code
-	dw.ResponseWriter.WriteHeader(code)
-}
-
-func (dw *detailedResponseWriter) StatusCode() int {
-	return dw.statusCode
-}
-
-func Logger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		dw := &detailedResponseWriter{ResponseWriter: w}
-		next.ServeHTTP(dw, r)
-		log.Info().
-			Str("method", r.Method).
-			Str("request_uri", r.URL.Path).
-			Dur("duration", time.Since(start)).
-			Int("status_code", dw.StatusCode()).
-			Send()
-	})
 }

@@ -25,6 +25,7 @@ require (
 	github.com/go-openapi/swag v0.19.5 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
+	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
