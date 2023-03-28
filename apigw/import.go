@@ -55,10 +55,15 @@ func (api *API) addOperationToAPI(spec *openapi3.T, op *openapi3.Operation, meth
 		if err := mapstructure.Decode(ext, &data); err != nil {
 			return fmt.Errorf("unable to parse x-amazon-apigateway-integration extension for %s error: %w", path, err)
 		} else {
+			secReqs := make([]openapi3.SecurityRequirement, 0)
+			secReqs = append(secReqs, spec.Security...)
 			if op.Security != nil && len(*op.Security) > 0 {
+				secReqs = append(secReqs, *op.Security...)
+			}
+			if len(secReqs) > 0 {
 				// we are going to assume one for now
 				auths := make([]string, 0)
-				for _, req := range *op.Security {
+				for _, req := range secReqs {
 					for k := range req {
 						auths = append(auths, k)
 					}
