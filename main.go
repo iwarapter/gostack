@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/iwarapter/gostack/internal/mw"
+
 	"github.com/jessevdk/go-flags"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -98,6 +100,7 @@ func main() {
 func setupStack(stack config.GoStack, lambs lambstack.LambdaFactory, port int) (http.Handler, error) {
 	router := mux.NewRouter()
 	router.Use(Logger)
+	router.Use(mw.XForwardedFor)
 
 	apiRouter := router.Host("api.127.0.0.1.nip.io").Subrouter()
 	apiRouter = apiRouter.PathPrefix("/restapis").Subrouter()
