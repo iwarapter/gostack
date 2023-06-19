@@ -74,11 +74,11 @@ var loginForm = `
     <br />
 
     <label for="introspection">INTROSPECTION:</label>
-    <textarea id="introspection" rows="10" cols="50" name="introspection">{"active": true,"scope": "openid"}</textarea>
+    <textarea id="introspection" rows="10" cols="50" name="introspection">%s</textarea>
     <br />
 
     <label for="userinfo">USERINFO:</label>
-    <textarea id="userinfo" rows="10" cols="50" name="userinfo">{}</textarea>
+    <textarea id="userinfo" rows="10" cols="50" name="userinfo">%s</textarea>
     <br />
 
 	<label for="cookie-max-age">Cookie Max-Age (Seconds):</label>
@@ -95,7 +95,8 @@ var loginForm = `
 `
 
 func (alb *ALB) authLoginHandler() http.HandlerFunc {
-	tmpl := template.Must(template.New("login").Parse(loginForm))
+	// TODO this should be an actual template with values but I'm lazy
+	tmpl := template.Must(template.New("login").Parse(fmt.Sprintf(loginForm, alb.conf.DefaultIntrospection, alb.conf.DefaultUserinfo)))
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := tmpl.Execute(w, ""); err != nil {
 			log.Error().Err(err).Msg("unable to render auth login page")

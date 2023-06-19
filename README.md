@@ -32,7 +32,10 @@ apigateways:
   - id: example
     openapi-spec: swagger.json
 albs:
-  - rules:
+  - id: default
+    default-introspection: '{"active": true,"scope": "openid email"}'
+    default-userinfo: '{"foo":"bar"}'
+    rules:
     - path: /config
       oidc: true
       methods:

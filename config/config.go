@@ -18,7 +18,10 @@ type APIGW struct {
 }
 
 type ALB struct {
-	Rules []ALBRule `yaml:"rules"`
+	Name                 string    `yaml:"name"`
+	DefaultIntrospection string    `yaml:"default-introspection"`
+	DefaultUserinfo      string    `yaml:"default-userinfo"`
+	Rules                []ALBRule `yaml:"rules"`
 }
 
 type ALBRule struct {

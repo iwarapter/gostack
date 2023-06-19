@@ -11,8 +11,8 @@ require (
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/sessions v1.2.1
+	github.com/jessevdk/go-flags v1.5.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/rs/cors v1.8.3
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -25,7 +25,6 @@ require (
 	github.com/go-openapi/swag v0.19.5 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
-	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

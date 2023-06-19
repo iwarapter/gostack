@@ -41,6 +41,7 @@ func (l *lambstack) Start() error {
 		l.cmd.Env = append(l.cmd.Env, fmt.Sprintf("%s=%s", key, *val))
 	}
 	l.cmd.Env = append(l.cmd.Env, fmt.Sprintf("_LAMBDA_SERVER_PORT=%d", l.port))
+	l.cmd.Env = append(l.cmd.Env, "_X_AMZN_TRACE_ID=Root=1-00000000-000000000000000000000000;Parent")
 	l.cmd.Dir = l.path
 	l.cmd.Stderr = log.With().Str("level", zerolog.InfoLevel.String()).Str("functionName", l.name).Logger()
 	l.cmd.Stdout = l.cmd.Stderr

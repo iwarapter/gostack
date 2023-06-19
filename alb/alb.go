@@ -28,6 +28,7 @@ type ALB struct {
 	mockData     map[string]mockdata
 	codeExchange *cache.Cache[string, string]
 	port         int
+	conf         config.ALB
 }
 
 type mockdata struct {
@@ -40,7 +41,7 @@ type mockdata struct {
 
 var store = sessions.NewCookieStore([]byte("top_secret"))
 
-func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]config.MockData, port int) *ALB {
+func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, conf config.ALB, stack config.GoStack, port int) *ALB {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -63,11 +64,24 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]
 		HttpOnly: true,
 	}
 	authRouter := subrouter.Host("auth.127.0.0.1.nip.io").Subrouter()
-	albRouter := subrouter.Host("alb.127.0.0.1.nip.io").Subrouter()
+	name := conf.Name
+	if name == "" {
+		name = "alb"
+	}
+	hostname := fmt.Sprintf("%s.127.0.0.1.nip.io", name)
+	keysHostname := fmt.Sprintf("keys.%s.127.0.0.1.nip.io", name)
+	albRouter := subrouter.Host(hostname).Subrouter()
 
-	subrouter.Host("keys-alb.127.0.0.1.nip.io").Methods(http.MethodGet).Path("/fakekey").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	subrouter.Host(keysHostname).Methods(http.MethodGet).Path("/fakekey").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprint(w, string(pub))
 	})
+
+	if conf.DefaultUserinfo == "" {
+		conf.DefaultUserinfo = "{}"
+	}
+	if conf.DefaultIntrospection == "" {
+		conf.DefaultIntrospection = `{"active": true,"scope": "openid"}`
+	}
 
 	lb := &ALB{
 		signer:       key,
@@ -76,8 +90,9 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, mdata map[string]
 		mockData:     map[string]mockdata{},
 		codeExchange: cache.NewContext[string, string](ctx),
 		port:         port,
+		conf:         conf,
 	}
-	for s, dat := range mdata {
+	for s, dat := range stack.MockData {
 		intro, _ := json.Marshal(dat.Introspection)
 		uinfo, _ := json.Marshal(dat.Userinfo)
 		lb.mockData[s] = mockdata{Introspection: string(intro), Userinfo: string(uinfo)}

@@ -2,6 +2,7 @@ package apigw
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -155,7 +156,12 @@ func (api *API) LambdaProxy(arn string) http.HandlerFunc {
 			w.Header().Add(k, v)
 		}
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write([]byte(resp.Body))
+		if resp.IsBase64Encoded {
+			b, _ = base64.StdEncoding.DecodeString(resp.Body)
+			_, _ = w.Write(b)
+		} else {
+			_, _ = w.Write([]byte(resp.Body))
+		}
 	}
 }
 

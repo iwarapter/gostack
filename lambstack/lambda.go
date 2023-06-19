@@ -78,8 +78,8 @@ func createInvokeRequest(input Input) (*messages.InvokeRequest, error) {
 
 	return &messages.InvokeRequest{
 		Payload:               payloadEncoded,
-		RequestId:             "0",
-		XAmznTraceId:          "",
+		RequestId:             "gostack-request-id",
+		XAmznTraceId:          "Root=1-00000000-000000000000000000000000;Parent",
 		Deadline:              *Deadline,
 		InvokedFunctionArn:    "",
 		CognitoIdentityId:     "",
