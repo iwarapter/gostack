@@ -69,7 +69,7 @@ func New(subrouter *mux.Router, lambs lambstack.LambdaFactory, conf config.ALB, 
 		name = "alb"
 	}
 	hostname := fmt.Sprintf("%s.127.0.0.1.nip.io", name)
-	keysHostname := fmt.Sprintf("keys.%s.127.0.0.1.nip.io", name)
+	keysHostname := fmt.Sprintf("keys-%s.127.0.0.1.nip.io", name)
 	albRouter := subrouter.Host(hostname).Subrouter()
 
 	subrouter.Host(keysHostname).Methods(http.MethodGet).Path("/fakekey").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,11 +136,11 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 		r.Handler(alb.LambdaProxy(rule.Target))
 	}
 	if rule.OIDC && rule.Files != nil {
-		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index}
+		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index, responseHeaders: rule.Files.ResponseHeaders}
 		r.Handler(alb.OidcHandler(spa.ServeHTTP))
 	}
 	if !rule.OIDC && rule.Files != nil {
-		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index}
+		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index, responseHeaders: rule.Files.ResponseHeaders}
 		r.Handler(spa)
 	}
 	return nil

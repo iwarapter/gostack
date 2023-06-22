@@ -181,6 +181,8 @@ albs:
       files:
         path: dist/
         index: index.html
+        response-headers:
+          X-Custom-Header: foo
 ```
 
 ### Headers

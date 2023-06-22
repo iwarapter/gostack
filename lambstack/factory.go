@@ -30,7 +30,7 @@ type lambstack struct {
 	timeout     int64
 	port        int
 	path        string
-	environment map[string]*string
+	environment map[string]string
 	cmd         *exec.Cmd
 	mu          sync.Mutex
 }
@@ -38,7 +38,7 @@ type lambstack struct {
 func (l *lambstack) Start() error {
 	l.cmd = exec.Command(fmt.Sprintf("%s/bootstrap", l.path)) //#nosec
 	for key, val := range l.environment {
-		l.cmd.Env = append(l.cmd.Env, fmt.Sprintf("%s=%s", key, *val))
+		l.cmd.Env = append(l.cmd.Env, fmt.Sprintf("%s=%s", key, val))
 	}
 	l.cmd.Env = append(l.cmd.Env, fmt.Sprintf("_LAMBDA_SERVER_PORT=%d", l.port))
 	l.cmd.Env = append(l.cmd.Env, "_X_AMZN_TRACE_ID=Root=1-00000000-000000000000000000000000;Parent")
@@ -124,12 +124,21 @@ func (f *Factory) Add(input lambda.CreateFunctionInput) (string, error) {
 		return "", err
 	}
 
+	envs := map[string]string{}
+	for key, val := range input.Environment.Variables {
+		if val != nil {
+			envs[key] = *val
+		} else {
+			log.Warn().Str("environment_variable", key).Msg("unable to set environment variable as value was nil")
+		}
+	}
+
 	lda := &lambstack{
 		name:        *input.FunctionName,
 		port:        l.Addr().(*net.TCPAddr).Port,
 		timeout:     *input.Timeout,
 		path:        dest,
-		environment: input.Environment.Variables,
+		environment: envs,
 	}
 	f.lambdas[arn] = lda
 

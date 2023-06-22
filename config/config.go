@@ -35,8 +35,9 @@ type ALBRule struct {
 }
 
 type FileServer struct {
-	Path  string `yaml:"path"`
-	Index string `yaml:"index"`
+	Path            string            `yaml:"path"`
+	Index           string            `yaml:"index"`
+	ResponseHeaders map[string]string `yaml:"response-headers"`
 }
 
 type FixedResponse struct {

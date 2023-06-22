@@ -11,8 +11,9 @@ import (
 // path to the index file within that static directory are used to
 // serve the SPA in the given static directory.
 type spaHandler struct {
-	staticPath string
-	indexPath  string
+	staticPath      string
+	indexPath       string
+	responseHeaders map[string]string
 }
 
 // ServeHTTP inspects the URL path to locate a file within the static dir
@@ -32,6 +33,9 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// prepend the path with the path to the static directory
 	path = filepath.Join(h.staticPath, path)
 
+	for key, value := range h.responseHeaders {
+		w.Header().Set(key, value)
+	}
 	// check whether a file exists at the given path
 	_, err = os.Stat(path)
 	if os.IsNotExist(err) {
