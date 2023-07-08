@@ -8,6 +8,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,7 +95,7 @@ var loginForm = `
 </html>
 `
 
-func (alb *ALB) authLoginHandler() http.HandlerFunc {
+func authLoginHandler(alb *ALB) http.HandlerFunc {
 	// TODO this should be an actual template with values but I'm lazy
 	tmpl := template.Must(template.New("login").Parse(fmt.Sprintf(loginForm, alb.conf.DefaultIntrospection, alb.conf.DefaultUserinfo)))
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -111,15 +112,17 @@ func (alb *ALB) OidcHandler(next http.HandlerFunc) http.HandlerFunc {
 		// Check if user is authenticated
 		vals := sess.Values
 		if _, ok := vals["authenticated"].(bool); !ok {
-			http.Redirect(w, r, fmt.Sprintf("http://auth.127.0.0.1.nip.io:%d/login", alb.port), http.StatusFound)
+			// in a normal oidc flow you'd hit the authorization_endpoint here, but we are faking all of that
+			http.Redirect(w, r, fmt.Sprintf("http://auth.127.0.0.1.nip.io:%d/login?redirect_uri=http://%s.127.0.0.1.nip.io:%d", alb.port, alb.name, alb.port), http.StatusFound)
 			return
 		}
 
 		token := sess.Values["token"].(string)
-		data := alb.mockData[token]
+		data := tokenData[token]
+		oidcData, _ := alb.signJwt(oidcHeader(), data.Userinfo)
 
 		r.Header.Set("x-amzn-oidc-accesstoken", token)
-		r.Header.Set("x-amzn-oidc-data", data.OidcData)
+		r.Header.Set("x-amzn-oidc-data", oidcData)
 		next.ServeHTTP(w, r)
 	}
 }
@@ -138,11 +141,11 @@ func (alb *ALB) signJwt(header, claims map[string]any) (string, error) {
 	toSign := strings.Join([]string{hdr, clm}, ".")
 	hasher := jwt.SigningMethodES256.Hash.New()
 	hasher.Write([]byte(toSign))
-	r, s, err := ecdsa.Sign(rand.Reader, alb.signer, hasher.Sum(nil))
+	r, s, err := ecdsa.Sign(rand.Reader, key, hasher.Sum(nil))
 	if err != nil {
 		return "", err
 	}
-	curveBits := alb.signer.Curve.Params().BitSize
+	curveBits := key.Curve.Params().BitSize
 
 	keyBytes := curveBits / 8
 	if curveBits%8 > 0 {
@@ -169,7 +172,7 @@ func createToken(n int) string {
 	return string(b)
 }
 
-func (alb *ALB) authSubmitHandler() http.HandlerFunc {
+func authSubmitHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		defer r.Body.Close()
@@ -183,7 +186,7 @@ func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 
 		code := createToken(32)
 		token := createToken(32)
-		alb.codeExchange.Set(code, token, cache.WithExpiration(1*time.Minute))
+		codeCache.Set(code, token, cache.WithExpiration(1*time.Minute))
 
 		intro := make(map[string]any)
 		_ = json.Unmarshal([]byte(r.Form.Get("introspection")), &intro)
@@ -193,20 +196,27 @@ func (alb *ALB) authSubmitHandler() http.HandlerFunc {
 		claims := make(map[string]any)
 		_ = json.Unmarshal([]byte(r.Form.Get("userinfo")), &claims)
 		claims["sub"] = sub
-		oidcData, _ := alb.signJwt(oidcHeader(), claims)
+
 		maxAge, err := strconv.Atoi(r.Form.Get("cookie-max-age"))
 		if err != nil {
 			log.Error().Err(err).Msg("unable to parse cookie max age")
 			maxAge = 300
 		}
-		alb.mockData[token] = mockdata{
+		referer := r.Header.Get("Referer")
+		u, err := url.Parse(referer)
+		if err != nil {
+			log.Error().Err(err).Msg("unable to parse referer")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		redirectURI := u.Query().Get("redirect_uri")
+		tokenData[token] = mockdata{
 			Sub:           sub,
-			Userinfo:      r.Form.Get("userinfo"),
+			Userinfo:      claims,
 			Introspection: string(introResp),
-			OidcData:      oidcData,
 			CookieMaxAge:  &maxAge,
 		}
-		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:%d/oauth2/idpresponse?code=%s", alb.port, code), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("%s/oauth2/idpresponse?code=%s", redirectURI, code), http.StatusFound)
 	}
 }
 
@@ -225,31 +235,37 @@ func oidcHeader() map[string]any {
 func (alb *ALB) idpResponse() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
-		token, ok := alb.codeExchange.Get(code)
+		token, ok := codeCache.Get(code)
 		if !ok {
-			log.Error().Msg("unable to find code to exchange, redirecting to login")
+			log.Error().Str("code", code).Msg("unable to find code to exchange, redirecting to login")
 			http.Redirect(w, r, fmt.Sprintf("http://auth.127.0.0.1.nip.io:%d/login", alb.port), http.StatusFound)
+			return
+		}
+		var data mockdata
+		if data, ok = tokenData[token]; !ok {
+			log.Error().Str("token", token).Msg("unable to find token data")
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		sess, _ := store.Get(r, "gostack")
 		sess.Values["authenticated"] = true
-		sess.Values["sub"] = alb.mockData[token].Sub
+		sess.Values["sub"] = data.Sub
 		sess.Values["token"] = token
-		if alb.mockData[token].CookieMaxAge != nil {
-			sess.Options.MaxAge = *alb.mockData[token].CookieMaxAge
+		if data.CookieMaxAge != nil {
+			sess.Options.MaxAge = *data.CookieMaxAge
 		}
 		if err := sess.Save(r, w); err != nil {
 			log.Error().Err(err).Msg("unable to save session for idp response")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("http://alb.127.0.0.1.nip.io:%d/", alb.port), http.StatusFound)
+		http.Redirect(w, r, fmt.Sprintf("http://%s.127.0.0.1.nip.io:%d/", alb.name, alb.port), http.StatusFound)
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Content-Type", "text/html")
 	}
 }
 
-func (alb *ALB) endSession() http.HandlerFunc {
+func endSession() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
 		postLogoutRedirectURI := params.Get("post_logout_redirect_uri")
@@ -264,14 +280,15 @@ func (alb *ALB) endSession() http.HandlerFunc {
 	}
 }
 
-func (alb *ALB) userinfo() http.HandlerFunc {
+func userinfo() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if token, err := getTokenFromHeader(r.Header); err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 		} else {
-			if data, ok := alb.mockData[token]; ok {
+			if data, ok := tokenData[token]; ok {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(data.Userinfo))
+				b, _ := json.Marshal(data.Userinfo)
+				_, _ = w.Write(b)
 			} else {
 				log.Error().Str("token", token).Msg("the token is not in the mock data store")
 				w.WriteHeader(http.StatusBadRequest)
@@ -296,7 +313,7 @@ func getTokenFromHeader(headers map[string][]string) (string, error) {
 	return token[1], nil
 }
 
-func (alb *ALB) introspection() http.HandlerFunc {
+func introspection() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -304,7 +321,7 @@ func (alb *ALB) introspection() http.HandlerFunc {
 		}
 		// TODO it should be authenticated
 		if token := r.Form.Get("token"); token != "" {
-			if data, ok := alb.mockData[token]; ok {
+			if data, ok := tokenData[token]; ok {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(data.Introspection))
 				return

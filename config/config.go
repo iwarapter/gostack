@@ -32,6 +32,11 @@ type ALBRule struct {
 	Target        string            `yaml:"target"`
 	OIDC          bool              `yaml:"oidc"`
 	Files         *FileServer       `yaml:"files"`
+	Proxy         *Proxy            `yaml:"proxy"`
+}
+
+type Proxy struct {
+	Target string `yaml:"target"`
 }
 
 type FileServer struct {

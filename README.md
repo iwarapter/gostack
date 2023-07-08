@@ -185,6 +185,20 @@ albs:
           X-Custom-Header: foo
 ```
 
+### Proxy
+
+The `proxy` rule will proxy the request to the provided URL.
+
+Example:
+```yaml
+albs:
+  - rules:
+    - path: /proxy
+      oidc: true
+      proxy:
+        target: https://www.google.com
+```
+
 ### Headers
 
 The `headers` rule will match on the provided headers. Headers are key/value pairs.
