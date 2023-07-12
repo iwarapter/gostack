@@ -28,48 +28,57 @@ var loginForm = `
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login</title>
+  <title>GOSTACK Login</title>
 
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       text-align: center;
+      background: #121212;
+      color: white;
     }
+
+	pre {
+	  color: orange;
+	}
 
     button {
-      background-color: white;
+      background-color: #4CAF50;
       color: black;
       border: 2px solid #4CAF50;
-      border-radius: 5px;
-      min-width: 10rem;
+      min-width: 100%;
       padding: .3rem;
-    }
-
-    .submit {
-      text-align: end;
-    }
-
-    .form {
-      display: inline-grid;
     }
 
     label {
       text-align: initial;
     }
 
-    textarea {
-      border-radius: 5px;
-    }
-
 	input {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      border-radius: 5px;
+    }
+
+    .form {
+      display: inline-grid;
+    }
+
+    .submit {
+      text-align: end;
     }
   </style>
 </head>
 
 <body>
   <form class="form" action="/submit" method="POST">
+	<pre>
+        ░██████╗░░█████╗░░██████╗████████╗░█████╗░░█████╗░██╗░░██╗      
+        ██╔════╝░██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██║░██╔╝      
+        ██║░░██╗░██║░░██║╚█████╗░░░░██║░░░███████║██║░░╚═╝█████═╝░      
+        ██║░░╚██╗██║░░██║░╚═══██╗░░░██║░░░██╔══██║██║░░██╗██╔═██╗░      
+        ╚██████╔╝╚█████╔╝██████╔╝░░░██║░░░██║░░██║╚█████╔╝██║░╚██╗      
+        ░╚═════╝░░╚════╝░╚═════╝░░░░╚═╝░░░╚═╝░░╚═╝░╚════╝░╚═╝░░╚═╝      
+	</pre>
+
     <label for="sub">SUB:</label>
     <input id="sub" name="sub" rows="1" cols="50" value="user@test.io">
     <br />
