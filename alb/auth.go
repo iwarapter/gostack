@@ -46,7 +46,7 @@ var loginForm = `
       background-color: #4CAF50;
       color: black;
       border: 2px solid #4CAF50;
-      min-width: 100%;
+      min-width: 100%%;
       padding: .3rem;
     }
 
