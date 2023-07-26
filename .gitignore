@@ -2,3 +2,4 @@
 *.json
 dist
 lambstack/examples/simple/simple
+coverage.txt

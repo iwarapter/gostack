@@ -8,12 +8,58 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iwarapter/gostack/config"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestALB_OidcHandler(t *testing.T) {}
 
-func TestALB_authLoginHandler(t *testing.T) {}
+func TestALB_authLoginHandler(t *testing.T) {
+	tests := []struct {
+		name     string
+		alb      *ALB
+		validate func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "configured default userinfo data is returned",
+			alb: &ALB{
+				name: "unit-test",
+				port: 8080,
+				conf: config.ALB{
+					DefaultUserinfo: `{"sub":"my-sub","mail":"mail@domain.io"}`,
+				},
+			},
+			validate: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "Login")
+				require.Contains(t, recorder.Body.String(), `<textarea id="userinfo" rows="10" cols="50" name="userinfo">{"sub":"my-sub","mail":"mail@domain.io"}</textarea>`)
+			},
+		},
+		{
+			name: "configured default introspection data is returned",
+			alb: &ALB{
+				name: "unit-test",
+				port: 8080,
+				conf: config.ALB{
+					DefaultIntrospection: `{"active":true}`,
+				},
+			},
+			validate: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "Login")
+				require.Contains(t, recorder.Body.String(), `<textarea id="introspection" rows="10" cols="50" name="introspection">{"active":true}</textarea>`)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			authLoginHandler(test.alb)(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+			test.validate(t, recorder)
+		})
+	}
+}
 
 func TestALB_authSubmitHandler(t *testing.T) {}
 
