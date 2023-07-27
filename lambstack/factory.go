@@ -123,6 +123,7 @@ func (f *Factory) Add(input lambda.CreateFunctionInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer l.Close()
 
 	envs := map[string]string{}
 	for key, val := range input.Environment.Variables {

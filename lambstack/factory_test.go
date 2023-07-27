@@ -54,7 +54,7 @@ func Test_WeCanInvokeALambda(t *testing.T) {
 	arn, err := f.Add(input)
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	resp, err := f.Invoke(arn, struct {
 		Name string `json:"name"`
 	}{
