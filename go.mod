@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-lambda-go v1.36.1
 	github.com/aws/aws-sdk-go v1.44.175
 	github.com/getkin/kin-openapi v0.114.0
-	github.com/golang-jwt/jwt/v4 v4.4.3
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/sessions v1.2.1
