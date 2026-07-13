@@ -43,6 +43,7 @@ type FileServer struct {
 	Path            string            `yaml:"path"`
 	Index           string            `yaml:"index"`
 	ResponseHeaders map[string]string `yaml:"response-headers"`
+	DevProxy        string            `yaml:"dev-proxy"`
 }
 
 type FixedResponse struct {

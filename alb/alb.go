@@ -138,13 +138,16 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 	if !rule.OIDC && rule.Target != "" {
 		r.Handler(alb.LambdaProxy(rule.Target))
 	}
-	if rule.OIDC && rule.Files != nil {
-		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index, responseHeaders: rule.Files.ResponseHeaders}
-		r.Handler(alb.OidcHandler(spa.ServeHTTP))
-	}
-	if !rule.OIDC && rule.Files != nil {
-		spa := spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index, responseHeaders: rule.Files.ResponseHeaders}
-		r.Handler(spa)
+	if rule.Files != nil {
+		var spa http.Handler = spaHandler{staticPath: rule.Files.Path, indexPath: rule.Files.Index, responseHeaders: rule.Files.ResponseHeaders}
+		if rule.Files.DevProxy != "" {
+			dev, err := newDevProxy(rule.Files.DevProxy)
+			if err != nil {
+				return err
+			}
+			spa = dev
+		}
+		r.Handler(alb.withOidc(rule.OIDC, spa))
 	}
 	if rule.Proxy != nil {
 		u, err := url.Parse(rule.Proxy.Target)
@@ -159,4 +162,25 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 		}
 	}
 	return nil
+}
+
+func (alb *ALB) withOidc(oidc bool, h http.Handler) http.Handler {
+	if oidc {
+		return alb.OidcHandler(h.ServeHTTP)
+	}
+	return h
+}
+
+func newDevProxy(target string) (http.Handler, error) {
+	u, err := url.Parse(target)
+	if err != nil {
+		return nil, fmt.Errorf("invalid dev-proxy url: %w", err)
+	}
+	prox := httputil.NewSingleHostReverseProxy(u)
+	director := prox.Director
+	prox.Director = func(req *http.Request) {
+		director(req)
+		req.Host = u.Host
+	}
+	return prox, nil
 }

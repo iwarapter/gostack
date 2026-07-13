@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -24,6 +25,67 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
+
+func expandParam(s string) string {
+	i := 0
+	for i < len(s) && isNameChar(s[i], i) {
+		i++
+	}
+	name, rest := s[:i], s[i:]
+	if name == "" || rest == "" {
+		return os.Getenv(s)
+	}
+
+	var op, word string
+	switch {
+	case strings.HasPrefix(rest, ":-"):
+		op, word = ":-", rest[2:]
+	case strings.HasPrefix(rest, ":+"):
+		op, word = ":+", rest[2:]
+	case rest[0] == '-':
+		op, word = "-", rest[1:]
+	case rest[0] == '+':
+		op, word = "+", rest[1:]
+	default:
+		return os.Getenv(s)
+	}
+
+	val, ok := os.LookupEnv(name)
+	switch op {
+	case ":-":
+		if !ok || val == "" {
+			return word
+		}
+		return val
+	case "-":
+		if !ok {
+			return word
+		}
+		return val
+	case ":+":
+		if ok && val != "" {
+			return word
+		}
+		return ""
+	case "+":
+		if ok {
+			return word
+		}
+		return ""
+	}
+	return val
+}
+
+func isNameChar(c byte, pos int) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
+		return true
+	case c >= '0' && c <= '9':
+		return pos > 0
+	default:
+		return false
+	}
+}
 
 type detailedResponseWriter struct {
 	http.ResponseWriter
@@ -76,7 +138,7 @@ func main() {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}
 	var stack config.GoStack
-	err = yaml.Unmarshal([]byte(os.ExpandEnv(string(b))), &stack)
+	err = yaml.Unmarshal([]byte(os.Expand(string(b), expandParam)), &stack)
 	if err != nil {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}
