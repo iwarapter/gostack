@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -24,6 +25,15 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
+
+func expandWithDefault(key string) string {
+	name, def, hasDefault := strings.Cut(key, ":-")
+	val, ok := os.LookupEnv(name)
+	if (!ok || val == "") && hasDefault {
+		return def
+	}
+	return val
+}
 
 type detailedResponseWriter struct {
 	http.ResponseWriter
@@ -76,7 +86,7 @@ func main() {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}
 	var stack config.GoStack
-	err = yaml.Unmarshal([]byte(os.ExpandEnv(string(b))), &stack)
+	err = yaml.Unmarshal([]byte(os.Expand(string(b), expandWithDefault)), &stack)
 	if err != nil {
 		log.Fatal().Err(err).Msg("unable to load gostack file")
 	}

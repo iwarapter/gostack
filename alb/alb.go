@@ -152,6 +152,11 @@ func (alb *ALB) AddRule(rule config.ALBRule) error {
 			return fmt.Errorf("invalid target url: %w", err)
 		}
 		prox := httputil.NewSingleHostReverseProxy(u)
+		director := prox.Director
+		prox.Director = func(req *http.Request) {
+			director(req)
+			req.Host = u.Host
+		}
 		if rule.OIDC {
 			r.Handler(alb.OidcHandler(prox.ServeHTTP))
 		} else {
