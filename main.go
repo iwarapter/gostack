@@ -100,7 +100,7 @@ func main() {
 	}
 	headersOk := handlers.AllowedHeaders([]string{"Authorization", "Content-Type"})
 	originsOk := handlers.AllowedOrigins([]string{"http://alb.127.0.0.1.nip.io:8080"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS"})
 	srv := &http.Server{
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

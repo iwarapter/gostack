@@ -44,6 +44,11 @@ func (api *API) Import(spec *openapi3.T) error {
 				return err
 			}
 		}
+		if item.Patch != nil {
+			if err := api.addOperationToAPI(spec, item.Patch, http.MethodPatch, path); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

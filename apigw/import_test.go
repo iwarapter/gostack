@@ -72,6 +72,51 @@ func Test_ImportSimpleGetAPI(t *testing.T) {
 	assert.Equal(t, []byte("unit-test"), b)
 }
 
+func Test_ImportSimplePatchAPI(t *testing.T) {
+	f := &mockFactory{
+		responses: map[string]func(payload any) ([]byte, error){
+			"arn:aws:lambda:us-east-1:123456789012:function:simple": func(_ any) ([]byte, error) {
+				resp := events.APIGatewayProxyResponse{
+					Body:       "unit-test",
+					StatusCode: http.StatusOK,
+				}
+
+				return json.Marshal(&resp)
+			},
+		},
+	}
+
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromFile("examples/patch.yml")
+	require.NoError(t, err)
+	require.NoError(t, doc.Validate(context.Background()))
+
+	r := mux.NewRouter().Host(apiHostName).Subrouter()
+	api := New(r, f, "unit-test")
+	require.NoError(t, api.Import(doc))
+
+	rt := r.Get("patchExample")
+	require.NotNil(t, rt)
+	methods, _ := rt.GetMethods()
+	host, _ := rt.GetHostTemplate()
+	path, _ := rt.GetPathTemplate()
+	assert.Equal(t, []string{"PATCH"}, methods)
+	assert.Equal(t, apiHostName, host)
+	assert.Equal(t, "/unit-test/simple", path)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	cli := srv.Client()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, fmt.Sprintf("%s/unit-test/simple", srv.URL), nil)
+	require.NoError(t, err)
+	req.Host = apiHostName
+	resp, err := cli.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("unit-test"), b)
+}
+
 func Test_ImportLambdaAuthorizerGetAPI(t *testing.T) {
 	tests := []struct {
 		name string
